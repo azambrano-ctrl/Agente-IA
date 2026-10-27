@@ -1,5 +1,7 @@
 node_modules/
 .env
 data/*.json
+data/*.csv
+!data/clientes-ejemplo.csv
 !data/.gitkeep
 *.log

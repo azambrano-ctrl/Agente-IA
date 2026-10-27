@@ -15,6 +15,14 @@ export function crearWhatsApp({ token, phoneNumberId, apiVersion }, fetchFn = fe
   return {
     enviarTexto: (to, texto) => llamar({ to, type: 'text', text: { body: texto, preview_url: false } }),
     marcarLeido: (messageId) => llamar({ status: 'read', message_id: messageId }),
+    /** Plantilla aprobada en Meta: única forma de escribir a alguien fuera de la ventana de 24 h. */
+    enviarPlantilla: (to, nombre, idioma = 'es_AR', parametros = []) => llamar({
+      to, type: 'template',
+      template: {
+        name: nombre, language: { code: idioma },
+        components: parametros.length ? [{ type: 'body', parameters: parametros.map((text) => ({ type: 'text', text })) }] : [],
+      },
+    }),
   };
 }
 
@@ -48,6 +56,9 @@ export function extraerMensajes(payload) {
         else if (m.type === 'button') texto = m.button?.text;
         else if (m.type === 'interactive') {
           texto = m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title;
+        } else if (m.type === 'location' && m.location) {
+          const { latitude, longitude, name, address } = m.location;
+          texto = `[ubicación compartida] lat ${latitude}, lng ${longitude}${name ? ` - ${name}` : ''}${address ? ` - ${address}` : ''}`;
         }
         salida.push({ id: m.id, de: m.from, nombre: nombres[m.from] ?? null, tipo: m.type, texto });
       }

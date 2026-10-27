@@ -18,6 +18,14 @@ export const config = {
     verifyToken: env.WHATSAPP_VERIFY_TOKEN ?? '',
     appSecret: env.WHATSAPP_APP_SECRET ?? '',
     apiVersion: env.WHATSAPP_API_VERSION ?? 'v21.0',
+    plantillaTecnico: {
+      nombre: env.WHATSAPP_PLANTILLA_TECNICO ?? '',
+      idioma: env.WHATSAPP_PLANTILLA_IDIOMA ?? 'es_AR',
+    },
+  },
+  panel: {
+    usuario: env.PANEL_USUARIO ?? 'admin',
+    clave: env.PANEL_CLAVE ?? '',
   },
   openrouter: {
     apiKey: env.OPENROUTER_API_KEY ?? '',

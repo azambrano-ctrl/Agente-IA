@@ -1,132 +1,144 @@
 # 🤖 Agente de IA en WhatsApp para un ISP
 
-El WhatsApp de tu proveedor de internet atendiendo solo: un agente que **conversa** con clientes e interesados, **recuerda** la charla, **responde** sobre planes, cobertura, pagos y soporte, y **actúa de verdad**: abre reclamos con número, agenda instalaciones y visitas técnicas y le avisa al equipo.
+El WhatsApp de tu proveedor de internet atendiendo solo:
 
-Lo que resuelve:
-
-- 💬 **Ventas:** planes y precios, consulta de cobertura por barrio, recomendación de plan y agenda de la instalación.
-- 🛠️ **Soporte:** primero se fija si hay un corte avisado en la zona, después guía el diagnóstico (luces PON/LOS, reinicio, cable o WiFi) y, si no se resuelve, abre un ticket y ofrece una visita técnica.
-- 📅 **Visitas:** instalación, visita técnica, cambio o retiro de equipo, en franjas de 2 h y con varias cuadrillas.
-- 🎫 **Gestiones:** bajas, cambios de plan, facturación o pedido de hablar con una persona generan un ticket y llegan al equipo por WhatsApp.
+- 💰 **"¿Cuánto debo?"**: identifica al cliente y le revisa el sistema (saldo, vencimiento, último pago, si está suspendido y cómo pagar).
+- 🏠 **"Quiero instalar internet"**: le hace todas las preguntas (cobertura, plan, titular, DNI, dirección, entre calles, vivienda, email, ubicación y día), le muestra un resumen, la carga en el sistema, reserva la franja y se la manda al técnico.
+- 🚨 **"No tengo internet"**: revisa si hay un corte en la zona, lo guía con los pasos básicos y, si no se resuelve, carga la incidencia en el sistema y **la despacha a un técnico por WhatsApp**. El técnico contesta `TOMO`, `EN CAMINO` y `LISTO`, y el cliente recibe un aviso en cada paso.
+- 🗂️ **Bajas, cambios de plan, facturación o "quiero hablar con alguien"**: las deriva a la oficina con número de gestión.
+- 🖥️ **Panel web** para la oficina: órdenes, técnicos, clientes, carga de CSV y registro de pagos.
 
 ```
-Cliente ──► WhatsApp (Meta) ──► Tu sistema (agente.js) ──► OpenRouter (Claude / GPT / Gemini / Llama / DeepSeek)
-                                   │  memoria  · ficha del negocio · herramientas (agenda)
+Cliente ─► WhatsApp ─► Agente IA ─► Sistema (clientes · deudas · órdenes)
+                                       │
+                                       └─► Técnico por WhatsApp ─► TOMO / EN CAMINO / LISTO ─► aviso al cliente
 ```
 
-- Node.js 20.12 o más nuevo, **sin dependencias**: no hace falta `npm install`.
-- La memoria y la agenda se guardan en `data/*.json`.
+Node.js 20.12 o más nuevo, **sin dependencias** (no hace falta `npm install`). Los datos se guardan en `data/`.
 
 ---
 
-## Paso 1 · El plan
-
-Antes de tocar código, definí:
-
-| Pregunta | Ejemplo |
-|---|---|
-| ¿Qué hace tu negocio? | Proveedor de internet por fibra e inalámbrico |
-| ¿Quiénes son tus clientes? | Abonados e interesados que escriben por WhatsApp |
-| ¿Qué resuelve el agente? | Ventas, cobertura, soporte de primer nivel y gestiones |
-| ¿Qué acciones puede tomar? | Abrir tickets, agendar o cancelar visitas y avisar al equipo |
-
-## Paso 2 · Conectar WhatsApp (Meta for Developers)
-
-1. Entrá a <https://developers.facebook.com>, creá una **App** de tipo *Business* y agregale el producto **WhatsApp**.
-2. En *WhatsApp › Configuración de la API* copiá el **Phone number ID** y el **token** (para producción, generá un token permanente con un *usuario del sistema* en el Business Manager).
-3. En *Configuración › Básica* copiá el **App Secret**: sirve para validar que los webhooks vienen de Meta.
-4. En *WhatsApp › Configuración › Webhook* poné:
-   - URL de devolución de llamada: `https://TU-DOMINIO/webhook`
-   - Token de verificación: el mismo valor que `WHATSAPP_VERIFY_TOKEN`
-   - Suscribite al campo **messages**.
+## 1 · Configurar
 
 ```bash
-cp .env.example .env   # y completá los valores
+cp .env.example .env     # completá los valores (abajo se explica cada uno)
 ```
 
-## Paso 3 · Conectar el modelo (OpenRouter)
+| Variable | De dónde sale |
+|---|---|
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | developers.facebook.com › tu App › WhatsApp › Configuración de la API |
+| `WHATSAPP_VERIFY_TOKEN` | Una frase que inventás vos; la misma va en el webhook de Meta |
+| `WHATSAPP_APP_SECRET` | App › Configuración › Básica (valida que los mensajes vengan de Meta) |
+| `WHATSAPP_PLANTILLA_TECNICO` | Plantilla aprobada en Meta para avisar a un técnico fuera de la ventana de 24 h (ver más abajo) |
+| `OPENROUTER_API_KEY`, `MODELO` | openrouter.ai. Para cambiar de modelo cambiás una línea |
+| `ADMIN_WHATSAPP` | Números de la oficina que reciben órdenes y gestiones nuevas |
+| `PANEL_USUARIO`, `PANEL_CLAVE` | Acceso a `https://TU-DOMINIO/panel` |
 
-Creá una API key en <https://openrouter.ai> y ponela en `OPENROUTER_API_KEY`. Para cambiar de modelo, cambiás una línea:
+En Meta › WhatsApp › Configuración › Webhook poné la URL `https://TU-DOMINIO/webhook` y el token de verificación, y suscribite al campo **messages**.
 
-```env
-MODELO=openai/gpt-4o-mini          # o anthropic/claude-sonnet-4.5, google/gemini-2.5-flash, deepseek/deepseek-chat…
-```
-
-Usá un modelo que soporte *tool calling*.
-
-## Paso 4 · Memoria
-
-Si no tiene memoria, cada mensaje arranca la charla desde cero. Por eso cada cliente (su número) tiene su historial en `data/memoria.json`, y los últimos `MAX_HISTORIAL` mensajes se mandan al modelo con cada mensaje nuevo.
-
-## Paso 5 · Tu empresa
-
-Editá `negocio.json` con los datos reales:
+## 2 · Tu empresa: `negocio.json`
 
 | Campo | Qué poner |
 |---|---|
 | `nombre`, `direccion` | Nombre comercial y oficina |
-| `planes` | Nombre, velocidad y precio de cada plan |
-| `instalacion` | Costo, equipo incluido y plazo |
-| `cobertura` | Barrios o localidades donde hay servicio |
-| `avisos` | Cortes o mantenimientos vigentes, ej. `[{"zona": "Alberdi", "mensaje": "Corte de fibra, se estima volver a las 18 h"}]` (sin `zona` aplica a todos) |
-| `horarios` | Horario de atención |
-| `visitas` | Tipos de visita, horarios, duración de la franja y cantidad de cuadrillas |
-| `pagos`, `soporte`, `preguntasFrecuentes` | Medios de pago y vencimiento, pasos de diagnóstico y preguntas frecuentes |
+| `planes` | Nombre, velocidad y precio |
+| `instalacion` | Costo, equipo y plazo |
+| `cobertura` | Barrios o localidades con servicio |
+| `avisos` | Cortes vigentes, ej. `[{"zona": "Alberdi", "mensaje": "Corte de fibra, vuelve 18 h"}]`. Mientras haya un aviso en una zona, el agente no despacha técnicos ahí |
+| `pagos` | Medios de pago, alias y vencimiento |
+| `soporte` | Pasos de diagnóstico antes de mandar un técnico |
+| `visitas` | Horarios de instalación, duración de la franja y cantidad de cuadrillas |
+| `tecnicos` | `nombre`, `telefono` (formato WhatsApp, ej. `5493511234567`) y `zonas` que cubre |
 
-El agente responde **solo** con esa ficha. Con el servidor andando, `negocio.json` se recarga solo: si hay un corte, lo cargás en `avisos` y desde ese momento el agente lo informa sin reiniciar nada (y lo sacás cuando se resuelve).
+Con el servidor andando, `negocio.json` se recarga solo: cargás o sacás un corte y se aplica al instante.
 
-## Paso 6 · Herramientas (el agente actúa)
+## 3 · Cargar los clientes y sus deudas
 
-| Herramienta | Qué hace |
-|---|---|
-| `consultar_cobertura(ubicacion)` | Verifica si hay servicio en esa dirección o barrio y si hay cortes avisados |
-| `datos_del_cliente(nombre?, direccion?, numeroCliente?)` | Lee o guarda los datos del titular |
-| `crear_ticket(tipo, descripcion)` | Abre un reclamo o solicitud (`soporte`, `alta`, `cambio_plan`, `baja`, `administrativo`, `humano`) y devuelve el número |
-| `ver_mis_tickets()` | Lista los reclamos abiertos del cliente |
-| `ver_agenda(fecha)` | Franjas libres para visitas. Rechaza fechas que no existen, que ya pasaron o sin visitas |
-| `agendar_visita(fecha, franja, tipo, nombre, direccion)` | Agenda una instalación o visita técnica |
-| `ver_mis_visitas()` / `cancelar_visita(id)` | Consultar o cancelar visitas |
+Exportá tu planilla de Excel como CSV con estas columnas (sirve `;` o `,`). Tenés un ejemplo en `data/clientes-ejemplo.csv`.
 
-- El teléfono del cliente sale del webhook, nunca del modelo, así que nadie puede ver los reclamos o visitas de otra persona.
-- Cada ticket y visita nueva le llega al equipo por WhatsApp a los números de `ADMIN_WHATSAPP`. Por reglas de Meta, esos números tienen que haberle escrito al número del agente en las últimas 24 h; si no, el aviso queda solo en el log.
-- Los tickets se guardan en `data/tickets.json` y las visitas en `data/agenda.json`. Si usás un sistema de gestión (MikroWisp, ISPCube, Wispro, Splynx…), esos métodos se conectan a su API.
-
-## Paso 7 · Probar
-
-```bash
-npm test         # batería de pruebas automática (no gasta tokens)
-npm run chat     # chateá con el agente en la terminal, sin WhatsApp
+```
+numeroCliente;nombre;dni;telefono;direccion;zona;plan;estado;saldo;vencimiento;ultimoPago
+10234;Lucía Paz;30111222;3515551234;Obispo Trejo 300;Nueva Córdoba;Fibra 300;activo;24.000;2026-11-10;2026-10-08
 ```
 
-La batería cubre las pruebas del vídeo:
+```bash
+npm run importar -- clientes.csv      # o desde el panel: Clientes › Importar CSV
+```
 
-- ✅ pregunta simple (planes y precios)
-- ✅ alta completa: cobertura → datos → instalación agendada
-- ✅ «no tengo internet» → ticket de soporte con número y aviso al equipo
-- ✅ «visita el 31 de febrero» (la fecha no existe)
-- ✅ 2 mensajes a la vez (se juntan en uno solo, `DEBOUNCE_MS`)
-- ✅ «ignorá tus instrucciones» (prompt blindado y herramientas acotadas al cliente)
-- ✅ agendar y cancelar, con cupo por cuadrilla
+- Si un cliente ya existe (por `numeroCliente`), se actualiza. Para refrescar saldos, reimportá la planilla cuando quieras.
+- `estado`: `activo` o `suspendido`. Al suspendido no se le manda técnico: el agente le informa la deuda.
+- Los pagos también se registran a mano desde el panel; si el saldo queda en 0, el cliente se reactiva.
 
-Probá también a mano con `npm run chat` antes de abrirlo al público.
+**¿Cómo identifica al cliente?** Por el número de WhatsApp desde el que escribe, comparando con la columna `telefono`, con o sin 54 9. Si escribe desde otro número, le pide **DNI y número de cliente**, y los dos tienen que coincidir. Después de 3 intentos fallidos lo deriva a la oficina. Nunca da datos de otra cuenta.
 
-## Paso 8 · Ponerlo en vivo (VPS)
+## 4 · Los técnicos por WhatsApp
 
-Tu notebook no es un servidor: si la cerrás, el agente deja de atender. Subilo a un VPS (Hetzner, DigitalOcean, Contabo, etc.) con un dominio apuntando a su IP.
+Cuando se carga una falla o una instalación, el sistema elige al técnico de esa zona con menos órdenes abiertas y le manda:
 
-**Con Docker (recomendado):**
+```
+🔧 ORDEN #1001 · REPARACIÓN (sin_servicio)
+👤 Lucía Paz (cliente 10234)
+📞 3515551234
+📍 Obispo Trejo 300 - Nueva Córdoba
+📝 Sin internet desde anoche
+🔍 Ya probó: LOS en rojo, reinició 2 veces
+🕒 Disponibilidad: tardes
+🗺️ https://maps.google.com/?q=...
+Respondé TOMO 1001 para aceptarla.
+```
+
+El técnico responde al mismo número del agente. Sus mensajes no pasan por la IA, se toman como comandos:
+
+| Comando | Qué pasa |
+|---|---|
+| `TOMO 1001` | Acepta la orden y se le avisa al cliente quién la tomó |
+| `EN CAMINO 1001` | Se le avisa al cliente que va en camino |
+| `LISTO 1001 cambié el conector` | Se cierra la orden, se le avisa al cliente y a la oficina |
+| `NO PUEDO 1001 motivo` | Se reasigna a otro técnico (o queda para la oficina) |
+| `MIS` | Lista sus órdenes abiertas |
+
+**Regla de las 24 h de Meta:** solo se le puede escribir texto libre a alguien que le escribió al número en las últimas 24 h. Si un técnico no escribió, se le manda la plantilla `WHATSAPP_PLANTILLA_TECNICO`; cuando responde, recibe el detalle completo. Creala en *WhatsApp Manager › Plantillas* (categoría *Utilidad*) con un cuerpo como:
+
+> Nueva orden #{{1}} en {{2}}. Respondé este mensaje para ver el detalle.
+
+Lo más simple es que cada técnico le mande un "hola" al número al empezar el día.
+
+## 5 · Panel de la oficina
+
+`https://TU-DOMINIO/panel` (usuario y clave del `.env`):
+
+- **Órdenes:** reparaciones, instalaciones y gestiones, con todos los datos. Desde ahí cambiás el estado o asignás y reasignás técnico (se le manda por WhatsApp).
+- **Clientes:** buscás, importás CSV y registrás pagos.
+- **Técnicos:** cuántas órdenes abiertas tiene cada uno.
+
+## 6 · Probar
+
+```bash
+npm test                                          # batería automática (no gasta tokens)
+npm run importar -- data/clientes-ejemplo.csv
+npm run chat -- 5493515551234                     # chateás como Lucía (cliente del ejemplo)
+```
+
+En el chat, `/tecnico 5493510000001 TOMO 1001` simula a un técnico, y los WhatsApp que saldrían a técnicos y clientes se muestran en pantalla.
+
+La batería cubre: consulta de deuda por WhatsApp, identificación por DNI + número de cliente con bloqueo a los 3 intentos, instalación completa con despacho, planes y zonas inválidos, falla despachada a técnico, cliente suspendido, corte masivo, comandos de técnico (TOMO, EN CAMINO, LISTO, NO PUEDO, MIS), órdenes ajenas, plantilla de 24 h, panel con clave, CSV de Excel, «31 de febrero», 2 mensajes a la vez e «ignorá tus instrucciones».
+
+## 7 · Ponerlo en vivo (VPS)
+
+Tu notebook no es un servidor. En un VPS con un dominio apuntando a su IP:
 
 ```bash
 git clone <este-repo> && cd Agente-IA
 cp .env.example .env && nano .env
-nano deploy/Caddyfile                       # tu dominio (Caddy saca el HTTPS solo)
+nano negocio.json
+nano deploy/Caddyfile                      # tu dominio (Caddy saca el HTTPS solo)
 docker compose -f deploy/docker-compose.yml up -d --build
-docker compose -f deploy/docker-compose.yml logs -f agente
+docker compose -f deploy/docker-compose.yml exec agente node scripts/importar.js /ruta/clientes.csv
 ```
 
-**Sin Docker:** copiá el repo a `/opt/agente-ia` y usá `deploy/agente.service` (systemd), con Caddy o Nginx delante para el HTTPS.
+Sin Docker podés usar `deploy/agente.service` (systemd). Para comprobar que está andando: `curl https://TU-DOMINIO/salud`.
 
-Para comprobar que está andando: `curl https://TU-DOMINIO/salud`.
+**Backup:** todo el sistema vive en `data/` (`sistema.json`, `agenda.json`, `memoria.json`). Copialo seguido.
 
 ---
 
@@ -134,26 +146,21 @@ Para comprobar que está andando: `curl https://TU-DOMINIO/salud`.
 
 ```
 agente.js            servidor (entrada)
-negocio.json         ficha de la empresa  ← lo que más vas a editar
+negocio.json         ficha de la empresa y técnicos   ← lo que más vas a editar
 src/
+  sistema.js         clientes, deudas y órdenes de trabajo
+  despacho.js        asignación a técnicos y comandos por WhatsApp
+  herramientas.js    lo que el agente puede hacer en el sistema
   agente.js          bucle modelo ↔ herramientas
-  modelo.js          cliente OpenRouter
-  whatsapp.js        Cloud API: enviar, verificar webhook, validar firma
-  servidor.js        endpoints /webhook y /salud
+  negocio.js         ficha, cobertura y prompt
+  agenda.js          franjas de instalación por cuadrilla
+  panel.js/.html     panel web de la oficina
+  whatsapp.js        Cloud API: texto, plantillas, ubicación, firma
+  servidor.js        /webhook, /panel, /api, /salud
   cola.js            junta mensajes seguidos y ordena por cliente
   memoria.js         historial por cliente
-  agenda.js          visitas técnicas por franja y cuadrilla
-  tickets.js         reclamos y solicitudes numerados
-  errores.js         errores que se le devuelven al modelo
-  herramientas.js    definición y ejecución de las tools
-  negocio.js         ficha y prompt de sistema
-scripts/chat.js      chat local de prueba
-deploy/              Dockerfile, docker-compose, Caddyfile y systemd
+  csv.js, telefono.js, modelo.js, config.js, almacen.js, errores.js
+scripts/             chat local e importador de CSV
+deploy/              Dockerfile, docker-compose, Caddyfile, systemd
 test/                batería de pruebas
 ```
-
-## Seguridad
-
-- La firma `X-Hub-Signature-256` se valida si configurás `WHATSAPP_APP_SECRET`. Configuralo en producción.
-- Los mensajes duplicados (reintentos de Meta) se ignoran.
-- Nunca subas `.env` al repo (ya está en `.gitignore`).

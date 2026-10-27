@@ -3,7 +3,7 @@ import { extraerMensajes, firmaValida, verificarWebhook } from './whatsapp.js';
 
 const SOLO_TEXTO = 'Por ahora solo puedo leer mensajes de texto 🙂 ¿Me lo escribís?';
 
-export function crearServidor({ config, cola, whatsapp, log = console }) {
+export function crearServidor({ config, cola, whatsapp, despacho, panel, log = console }) {
   const vistos = new Set();
   const yaVisto = (id) => {
     if (vistos.has(id)) return true;
@@ -21,6 +21,8 @@ export function crearServidor({ config, cola, whatsapp, log = console }) {
     if (req.method === 'GET' && url.pathname === '/salud') {
       return responder(200, JSON.stringify({ ok: true, modelo: config.openrouter.modelo }), 'application/json');
     }
+
+    if (panel && await panel(req, res, url)) return;
 
     if (url.pathname !== '/webhook') return responder(404, 'no encontrado');
 
@@ -49,7 +51,12 @@ export function crearServidor({ config, cola, whatsapp, log = console }) {
       if (yaVisto(m.id)) continue;
       log.info?.(`[entrante] ${m.de} (${m.tipo}): ${m.texto ?? '-'}`);
       whatsapp.marcarLeido(m.id).catch(() => {});
-      if (m.texto) cola.agregar(m.de, m.texto);
+      if (m.texto && despacho?.esTecnico(m.de)) {
+        // Los técnicos no hablan con la IA: sus mensajes son comandos (TOMO, EN CAMINO, LISTO…).
+        despacho.comandoTecnico(m.de, m.texto)
+          .then((r) => whatsapp.enviarTexto(m.de, r))
+          .catch((e) => log.error?.('[técnico]', e.message));
+      } else if (m.texto) cola.agregar(m.de, m.texto);
       else whatsapp.enviarTexto(m.de, SOLO_TEXTO).catch((e) => log.error?.('[whatsapp]', e.message));
     }
   });

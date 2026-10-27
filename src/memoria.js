@@ -36,6 +36,17 @@ export class Memoria {
     this.almacen.guardar();
   }
 
+  /** Intentos fallidos de identificación (anti adivinanza de DNI). */
+  intentos(telefono) {
+    return this.#cliente(telefono).intentos ?? 0;
+  }
+
+  sumarIntento(telefono) {
+    const c = this.#cliente(telefono);
+    c.intentos = (c.intentos ?? 0) + 1;
+    this.almacen.guardar();
+  }
+
   borrar(telefono) {
     delete this.almacen.datos.clientes[telefono];
     this.almacen.guardar();

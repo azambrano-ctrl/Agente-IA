@@ -64,7 +64,7 @@ export class Agenda {
     };
   }
 
-  crearVisita({ fecha, franja, tipo, nombre, direccion, telefono }) {
+  crearVisita({ fecha, franja, tipo, nombre, direccion, telefono, orden = null }) {
     if (!nombre?.trim()) throw new ErrorHerramienta('Falta el nombre del titular.');
     if (!direccion?.trim()) throw new ErrorHerramienta('Falta la dirección de la visita.');
     if (!this.#conf.tipos.includes(tipo)) {
@@ -76,7 +76,7 @@ export class Agenda {
 
     const visita = {
       id: randomUUID().slice(0, 8), fecha, franja, tipo,
-      nombre: nombre.trim(), direccion: direccion.trim(), telefono,
+      nombre: nombre.trim(), direccion: direccion.trim(), telefono, orden,
       estado: 'confirmada', creada: new Date().toISOString(),
     };
     this.almacen.datos.visitas.push(visita);
@@ -88,6 +88,15 @@ export class Agenda {
     const hoy = this.reloj().fecha;
     return this.#activas().filter((v) => v.telefono === telefono && v.fecha >= hoy)
       .sort((a, b) => `${a.fecha}${a.franja}`.localeCompare(`${b.fecha}${b.franja}`));
+  }
+
+  /** Libera la franja reservada para una orden (ej. instalación cancelada). */
+  liberarOrden(numeroOrden) {
+    for (const v of this.#activas().filter((x) => x.orden === numeroOrden)) {
+      v.estado = 'cancelada';
+      v.cancelada = new Date().toISOString();
+    }
+    this.almacen.guardar();
   }
 
   cancelarVisita(id, telefono) {

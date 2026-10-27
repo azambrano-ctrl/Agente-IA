@@ -5,38 +5,99 @@
   "direccion": "Av. Siempreviva 742 (oficina comercial)",
   "moneda": "$",
   "planes": [
-    { "nombre": "Fibra 100", "velocidad": "100 Mb simétricos", "precio": 18000 },
-    { "nombre": "Fibra 300", "velocidad": "300 Mb simétricos", "precio": 24000 },
-    { "nombre": "Fibra 600", "velocidad": "600 Mb simétricos", "precio": 32000 },
-    { "nombre": "Inalámbrico 20", "velocidad": "20 Mb (zonas rurales)", "precio": 15000 }
+    {
+      "nombre": "Fibra 100",
+      "velocidad": "100 Mb simétricos",
+      "precio": 18000
+    },
+    {
+      "nombre": "Fibra 300",
+      "velocidad": "300 Mb simétricos",
+      "precio": 24000
+    },
+    {
+      "nombre": "Fibra 600",
+      "velocidad": "600 Mb simétricos",
+      "precio": 32000
+    },
+    {
+      "nombre": "Inalámbrico 20",
+      "velocidad": "20 Mb (zonas rurales)",
+      "precio": 15000
+    }
   ],
   "instalacion": "$10.000, router WiFi en comodato incluido. Plazo habitual: 48 a 72 h hábiles.",
-  "cobertura": ["Centro", "Nueva Córdoba", "Alberdi", "General Paz", "Cerro de las Rosas", "Barrio Jardín"],
+  "cobertura": [
+    "Centro",
+    "Nueva Córdoba",
+    "Alberdi",
+    "General Paz",
+    "Cerro de las Rosas",
+    "Barrio Jardín"
+  ],
   "avisos": [],
   "horarios": {
-    "lun": ["08:00", "20:00"],
-    "mar": ["08:00", "20:00"],
-    "mie": ["08:00", "20:00"],
-    "jue": ["08:00", "20:00"],
-    "vie": ["08:00", "20:00"],
-    "sab": ["09:00", "13:00"],
+    "lun": [
+      "08:00",
+      "20:00"
+    ],
+    "mar": [
+      "08:00",
+      "20:00"
+    ],
+    "mie": [
+      "08:00",
+      "20:00"
+    ],
+    "jue": [
+      "08:00",
+      "20:00"
+    ],
+    "vie": [
+      "08:00",
+      "20:00"
+    ],
+    "sab": [
+      "09:00",
+      "13:00"
+    ],
     "dom": null
   },
   "visitas": {
-    "tipos": ["instalación", "visita técnica", "cambio de equipo", "retiro de equipo"],
+    "tipos": [
+      "instalación"
+    ],
     "horarios": {
-      "lun": ["08:00", "18:00"],
-      "mar": ["08:00", "18:00"],
-      "mie": ["08:00", "18:00"],
-      "jue": ["08:00", "18:00"],
-      "vie": ["08:00", "18:00"],
-      "sab": ["09:00", "13:00"],
+      "lun": [
+        "08:00",
+        "18:00"
+      ],
+      "mar": [
+        "08:00",
+        "18:00"
+      ],
+      "mie": [
+        "08:00",
+        "18:00"
+      ],
+      "jue": [
+        "08:00",
+        "18:00"
+      ],
+      "vie": [
+        "08:00",
+        "18:00"
+      ],
+      "sab": [
+        "09:00",
+        "13:00"
+      ],
       "dom": null
     },
     "franjaMin": 120,
     "cuadrillas": 2
   },
-  "pagos": "Transferencia, débito automático, Mercado Pago, Rapipago y Pago Fácil. Vence el día 10 de cada mes.",
+  "pagos": "Transferencia al alias TUISP.PAGOS, débito automático, Mercado Pago, Rapipago y Pago Fácil. Vence el día 10 de cada mes; con 2 meses de deuda se suspende el servicio.",
   "soporte": [
     "Revisá las luces del módem/ONU: si PON/LOS está en ROJO o titilando, hay un problema en la fibra y hace falta visita técnica.",
     "Desenchufá el router y el módem 30 segundos y volvé a enchufarlos.",
@@ -44,8 +105,33 @@
     "Si sigue sin funcionar, abrí un reclamo de soporte."
   ],
   "preguntasFrecuentes": [
-    { "pregunta": "¿Tienen permanencia mínima?", "respuesta": "No, podés dar de baja cuando quieras avisando con 30 días." },
-    { "pregunta": "¿Puedo cambiar de plan?", "respuesta": "Sí, el cambio se aplica desde la próxima factura." }
+    {
+      "pregunta": "¿Tienen permanencia mínima?",
+      "respuesta": "No, podés dar de baja cuando quieras avisando con 30 días."
+    },
+    {
+      "pregunta": "¿Puedo cambiar de plan?",
+      "respuesta": "Sí, el cambio se aplica desde la próxima factura."
+    }
   ],
-  "derivarHumano": "Para bajas, reclamos de facturación o si el cliente pide hablar con una persona, creá un ticket de tipo 'humano' o 'administrativo' y avisale que un asesor le escribe a la brevedad."
+  "tecnicos": [
+    {
+      "nombre": "Carlos (técnico)",
+      "telefono": "5493510000001",
+      "zonas": [
+        "Centro",
+        "Nueva Córdoba",
+        "Alberdi"
+      ]
+    },
+    {
+      "nombre": "Martín (técnico)",
+      "telefono": "5493510000002",
+      "zonas": [
+        "General Paz",
+        "Cerro de las Rosas",
+        "Barrio Jardín"
+      ]
+    }
+  ]
 }

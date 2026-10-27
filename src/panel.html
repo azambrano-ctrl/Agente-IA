@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel del agente</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --tx:#1d2330; --mut:#6b7385; --bd:#e3e6ec; --ac:#e2673a; --ok:#2f9e62; --warn:#d99a1e; --bad:#c94141; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14161b; --card:#1d2027; --tx:#e9ebf0; --mut:#9097a6; --bd:#2c303a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--tx); }
+  header { display:flex; gap:16px; align-items:center; padding:14px 16px; background:var(--card); border-bottom:1px solid var(--bd); flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 auto 0 0; }
+  nav button { border:0; background:none; color:var(--mut); padding:6px 10px; border-radius:6px; cursor:pointer; font:inherit; }
+  nav button.on { background:var(--ac); color:#fff; }
+  main { padding:16px; max-width:1200px; margin:auto; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
+  .kpi { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:12px; }
+  .kpi b { display:block; font-size:22px; }
+  .kpi span { color:var(--mut); font-size:12px; }
+  .tabla { background:var(--card); border:1px solid var(--bd); border-radius:10px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--bd); vertical-align:top; }
+  th { font-size:12px; color:var(--mut); font-weight:600; }
+  .estado { padding:2px 8px; border-radius:99px; font-size:12px; white-space:nowrap; background:var(--bd); }
+  .abierta { background:var(--bad); color:#fff } .asignada, .aceptada { background:var(--warn); color:#fff }
+  .en_camino { background:#3a7be2; color:#fff } .resuelta { background:var(--ok); color:#fff }
+  select, input, textarea, button.btn { font:inherit; padding:6px 8px; border:1px solid var(--bd); border-radius:6px; background:var(--bg); color:var(--tx); }
+  button.btn { cursor:pointer; background:var(--ac); color:#fff; border-color:var(--ac); }
+  .fila { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .mut { color:var(--mut); font-size:12px; }
+  .oculto { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📡 Panel del agente</h1>
+  <nav>
+    <button data-tab="ordenes" class="on">Órdenes</button>
+    <button data-tab="clientes">Clientes</button>
+    <button data-tab="tecnicos">Técnicos</button>
+  </nav>
+</header>
+<main>
+  <section id="ordenes">
+    <div class="kpis" id="kpis"></div>
+    <div class="fila">
+      <select id="filtro">
+        <option value="abiertas">Abiertas</option><option value="">Todas</option>
+        <option value="reparacion">Reparaciones</option><option value="instalacion">Instalaciones</option><option value="gestion">Gestiones</option>
+      </select>
+    </div>
+    <div class="tabla"><table><thead><tr><th>#</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Detalle</th><th>Estado</th><th>Técnico</th></tr></thead><tbody id="tOrdenes"></tbody></table></div>
+  </section>
+
+  <section id="clientes" class="oculto">
+    <div class="fila">
+      <input id="q" placeholder="Buscar por nombre, DNI, número, teléfono…" style="flex:1;min-width:200px">
+      <label class="btn" style="padding:6px 10px;border-radius:6px;background:var(--ac);color:#fff;cursor:pointer">Importar CSV<input type="file" id="csv" accept=".csv,text/csv" hidden></label>
+    </div>
+    <p class="mut">CSV con columnas: numeroCliente; nombre; dni; telefono; direccion; zona; plan; estado; saldo; vencimiento; ultimoPago. Exportalo desde Excel; si un cliente ya existe, se actualiza.</p>
+    <div class="tabla"><table><thead><tr><th>N°</th><th>Nombre</th><th>DNI</th><th>Teléfono</th><th>Zona</th><th>Plan</th><th>Estado</th><th>Saldo</th><th></th></tr></thead><tbody id="tClientes"></tbody></table></div>
+  </section>
+
+  <section id="tecnicos" class="oculto">
+    <p class="mut">Los técnicos se configuran en negocio.json (campo "tecnicos").</p>
+    <div class="tabla"><table><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Zonas</th><th>Órdenes abiertas</th></tr></thead><tbody id="tTecnicos"></tbody></table></div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const ESTADOS = ['abierta','asignada','aceptada','en_camino','resuelta','cancelada'];
+let datos = { ordenes: [], tecnicos: [] };
+
+async function api(ruta, opciones) {
+  const r = await fetch(ruta, opciones);
+  const j = await r.json();
+  if (!r.ok) { alert(j.error ?? 'Error'); throw new Error(j.error); }
+  return j;
+}
+
+async function cargar() {
+  datos = await api('/api/resumen');
+  const ab = datos.ordenes.filter((o) => !['resuelta','cancelada'].includes(o.estado));
+  const kpi = (n, t) => `<div class="kpi"><b>${n}</b><span>${t}</span></div>`;
+  $('#kpis').innerHTML = kpi(ab.filter((o) => o.clase === 'reparacion').length, 'Reparaciones abiertas')
+    + kpi(ab.filter((o) => o.clase === 'instalacion').length, 'Instalaciones pendientes')
+    + kpi(ab.filter((o) => o.clase === 'gestion').length, 'Gestiones pendientes')
+    + kpi(ab.filter((o) => o.estado === 'abierta').length, 'Sin técnico')
+    + kpi(datos.clientes, 'Clientes en el sistema');
+  pintarOrdenes();
+  $('#tTecnicos').innerHTML = datos.tecnicos.map((t) => `<tr><td>${esc(t.nombre)}</td><td>${esc(t.telefono)}</td><td>${esc((t.zonas ?? []).join(', '))}</td><td>${t.abiertas}</td></tr>`).join('');
+}
+
+function pintarOrdenes() {
+  const f = $('#filtro').value;
+  const lista = datos.ordenes.filter((o) => f === 'abiertas' ? !['resuelta','cancelada'].includes(o.estado) : !f || o.clase === f);
+  $('#tOrdenes').innerHTML = lista.map((o) => {
+    const d = o.datos ?? {};
+    const tec = o.clase === 'gestion' ? '—' : `<select data-asignar="${o.numero}"><option value="">${o.tecnico ? esc(o.tecnico.nombre) : 'Asignar…'}</option>${datos.tecnicos.map((t) => `<option value="${esc(t.telefono)}">${esc(t.nombre)} (${t.abiertas})</option>`).join('')}</select>`;
+    return `<tr>
+      <td><b>${o.numero}</b><div class="mut">${o.creada.slice(0,16).replace('T',' ')}</div></td>
+      <td>${esc(o.clase)}<div class="mut">${esc(o.tipo)}</div></td>
+      <td>${esc(o.nombre)}<div class="mut">${esc(o.numeroCliente ?? '')} · ${esc(o.telefono)}</div></td>
+      <td>${esc(o.direccion)}<div class="mut">${esc(o.zona)}${d.fecha ? ` · ${esc(d.fecha)} ${esc(d.franja)}` : ''}</div></td>
+      <td>${esc(o.descripcion)}${d.diagnostico ? `<div class="mut">Probó: ${esc(d.diagnostico)}</div>` : ''}${d.dni ? `<div class="mut">DNI ${esc(d.dni)} · ${esc(d.email)} · ${esc(d.tipoVivienda)} · ${esc(d.titularidad)}</div>` : ''}</td>
+      <td><select data-estado="${o.numero}">${ESTADOS.map((e) => `<option ${e === o.estado ? 'selected' : ''}>${e}</option>`).join('')}</select></td>
+      <td>${tec}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="mut">Sin órdenes</td></tr>';
+}
+
+async function buscarClientes() {
+  const lista = await api('/api/clientes?q=' + encodeURIComponent($('#q').value));
+  $('#tClientes').innerHTML = lista.map((c) => `<tr>
+    <td>${esc(c.numeroCliente)}</td><td>${esc(c.nombre)}</td><td>${esc(c.dni)}</td><td>${esc(c.telefono)}</td>
+    <td>${esc(c.zona)}</td><td>${esc(c.plan)}</td><td><span class="estado ${c.estado === 'activo' ? 'resuelta' : 'abierta'}">${esc(c.estado)}</span></td>
+    <td>$${Number(c.saldo).toLocaleString('es-AR')}<div class="mut">vence ${esc(c.vencimiento ?? '-')}</div></td>
+    <td><button class="btn" data-pago="${esc(c.numeroCliente)}">Registrar pago</button></td></tr>`).join('');
+}
+
+document.addEventListener('change', async (e) => {
+  const t = e.target;
+  if (t.id === 'filtro') return pintarOrdenes();
+  if (t.dataset.estado) {
+    const nota = t.value === 'cancelada' ? prompt('Motivo de la cancelación') ?? '' : '';
+    await api('/api/ordenes/' + t.dataset.estado, { method: 'POST', body: JSON.stringify({ estado: t.value, nota }) });
+    cargar();
+  }
+  if (t.dataset.asignar && t.value) {
+    await api('/api/ordenes/' + t.dataset.asignar, { method: 'POST', body: JSON.stringify({ accion: 'asignar', tecnico: t.value }) });
+    cargar();
+  }
+  if (t.id === 'csv' && t.files[0]) {
+    const r = await api('/api/clientes/importar', { method: 'POST', body: await t.files[0].text() });
+    alert(`Importados: ${r.nuevos} nuevos, ${r.actualizados} actualizados (total ${r.total}).`);
+    t.value = ''; buscarClientes(); cargar();
+  }
+});
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('nav button');
+  if (b) {
+    document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
+    document.querySelectorAll('main section').forEach((s) => s.classList.toggle('oculto', s.id !== b.dataset.tab));
+    if (b.dataset.tab === 'clientes') buscarClientes();
+  }
+  if (e.target.dataset.pago) {
+    const importe = prompt('Importe pagado');
+    if (importe) { await api(`/api/clientes/${encodeURIComponent(e.target.dataset.pago)}/pago`, { method: 'POST', body: JSON.stringify({ importe }) }); buscarClientes(); }
+  }
+});
+let espera; $('#q').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(buscarClientes, 250); });
+cargar(); setInterval(cargar, 30000);
+</script>
+</body>
+</html>

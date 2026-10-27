@@ -1,0 +1,4 @@
+numeroCliente;nombre;dni;telefono;direccion;zona;plan;estado;saldo;vencimiento;ultimoPago
+10234;Lucía Paz;30111222;3515551234;Obispo Trejo 300;Nueva Córdoba;Fibra 300;activo;24.000;2026-11-10;2026-10-08
+10235;Jorge Ríos;28999888;3515559876;Rosario de Santa Fe 1200;General Paz;Fibra 100;suspendido;36.000;2026-09-10;2026-08-05
+10236;Ana Gómez;35222333;3514443322;Av. Colón 2100;Alberdi;Fibra 600;activo;0;2026-11-10;2026-10-09

@@ -6,8 +6,10 @@ import { config, faltantes } from './src/config.js';
 import { Memoria } from './src/memoria.js';
 import { crearModelo } from './src/modelo.js';
 import { cargarNegocio } from './src/negocio.js';
+import { crearDespacho } from './src/despacho.js';
+import { crearPanel } from './src/panel.js';
 import { crearServidor } from './src/servidor.js';
-import { Tickets } from './src/tickets.js';
+import { Sistema } from './src/sistema.js';
 import { crearWhatsApp } from './src/whatsapp.js';
 
 const sinConfigurar = faltantes(['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN', 'OPENROUTER_API_KEY']);
@@ -29,17 +31,19 @@ watchFile(config.negocioFile, { interval: 2000 }, () => {
 
 const memoria = new Memoria(config.dataDir, config.maxHistorial);
 const agenda = new Agenda(config.dataDir, negocio);
-const tickets = new Tickets(config.dataDir);
+const sistema = new Sistema(config.dataDir);
 const whatsapp = crearWhatsApp(config.whatsapp);
 
-// Avisa al equipo de cada ticket y visita nueva (requiere que el admin haya escrito al número en las últimas 24 h).
+// Avisa a la oficina de órdenes y gestiones (requiere que hayan escrito al número en las últimas 24 h).
 const notificar = async (texto) => {
   for (const admin of config.adminWhatsapp) {
     await whatsapp.enviarTexto(admin, texto).catch((e) => console.error('[notificar]', e.message));
   }
 };
 
-const responder = crearAgente({ negocio, memoria, agenda, tickets, notificar, completar: crearModelo(config.openrouter) });
+const despacho = crearDespacho({ negocio, sistema, memoria, whatsapp, plantilla: config.whatsapp.plantillaTecnico, notificarAdmin: notificar });
+const panel = crearPanel({ ...config.panel, sistema, despacho, agenda });
+const responder = crearAgente({ negocio, memoria, agenda, sistema, despacho, notificar, completar: crearModelo(config.openrouter) });
 
 const cola = crearCola(async (telefono, texto) => {
   const respuesta = await responder(telefono, texto);
@@ -47,10 +51,10 @@ const cola = crearCola(async (telefono, texto) => {
   await whatsapp.enviarTexto(telefono, respuesta);
 }, { esperaMs: config.debounceMs });
 
-const servidor = crearServidor({ config, cola, whatsapp });
+const servidor = crearServidor({ config, cola, whatsapp, despacho, panel });
 servidor.listen(config.port, () => {
   console.info(`🤖 Agente de ${negocio.nombre} escuchando en :${config.port} (modelo ${config.openrouter.modelo})`);
-  console.info(`   Webhook: https://TU-DOMINIO/webhook`);
+  console.info(`   Webhook: https://TU-DOMINIO/webhook · Panel: https://TU-DOMINIO/panel${config.panel.clave ? '' : ' (deshabilitado: falta PANEL_CLAVE)'}`);
 });
 
 for (const senal of ['SIGINT', 'SIGTERM']) {
