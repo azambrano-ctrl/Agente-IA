@@ -1,0 +1,5 @@
+# Cambiá el dominio por el tuyo (registro A apuntando a la IP del VPS).
+# Caddy saca el certificado HTTPS solo; Meta exige HTTPS para el webhook.
+agente.tudominio.com {
+	reverse_proxy agente:3000
+}

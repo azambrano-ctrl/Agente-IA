@@ -1,0 +1,16 @@
+{
+  "name": "agente-ia-whatsapp",
+  "version": "1.0.0",
+  "description": "Agente de IA que atiende WhatsApp solo: conversa, recuerda, responde sobre tu negocio y agenda turnos.",
+  "type": "module",
+  "main": "agente.js",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node agente.js",
+    "chat": "node scripts/chat.js",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT"
+}

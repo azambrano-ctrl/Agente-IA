@@ -1,0 +1,16 @@
+# Alternativa sin Docker: systemd.
+#   sudo cp deploy/agente.service /etc/systemd/system/ && sudo systemctl enable --now agente
+[Unit]
+Description=Agente IA WhatsApp
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/agente-ia
+ExecStart=/usr/bin/node agente.js
+Restart=always
+RestartSec=3
+User=agente
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

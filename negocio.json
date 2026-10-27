@@ -1,0 +1,28 @@
+{
+  "nombre": "Clínica Dental Norte",
+  "rubro": "clínica dental",
+  "zonaHoraria": "America/Argentina/Cordoba",
+  "direccion": "Av. Colón 1250",
+  "servicios": [
+    { "nombre": "limpieza", "precio": 38000, "duracionMin": 45 },
+    { "nombre": "ortodoncia", "precio": null, "duracionMin": 45, "nota": "requiere consulta de evaluación" },
+    { "nombre": "blanqueo", "precio": null, "duracionMin": 45, "nota": "precio según evaluación" }
+  ],
+  "moneda": "$",
+  "horarios": {
+    "lun": ["08:00", "18:00"],
+    "mar": ["08:00", "18:00"],
+    "mie": ["08:00", "18:00"],
+    "jue": ["08:00", "18:00"],
+    "vie": ["08:00", "18:00"],
+    "sab": ["08:00", "18:00"],
+    "dom": null
+  },
+  "duracionTurnoMin": 45,
+  "obrasSociales": "Sí, aceptamos obras sociales y prepagas.",
+  "sena": "Se pide una seña del 20 % para confirmar el turno.",
+  "preguntasFrecuentes": [
+    { "pregunta": "¿Atienden urgencias?", "respuesta": "Sí, en el horario de atención, según disponibilidad." }
+  ],
+  "derivarHumano": "Si el cliente pide hablar con una persona, avisale que un integrante del equipo le va a escribir a la brevedad."
+}
