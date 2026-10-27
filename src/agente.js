@@ -5,8 +5,8 @@ const MAX_PASOS = 6;
 const MAX_LARGO = 2000;
 export const RESPUESTA_ERROR = 'Perdón, tuve un problema técnico. ¿Me lo repetís en un ratito? 🙏';
 
-/** El cerebro: conversa, recuerda, responde sobre el negocio y actúa con herramientas. */
-export function crearAgente({ negocio, memoria, agenda, completar, log = console }) {
+/** El cerebro: conversa, recuerda, responde sobre la empresa y actúa con herramientas. */
+export function crearAgente({ negocio, memoria, agenda, tickets, completar, notificar, log = console }) {
   return async function responder(telefono, texto) {
     const entrada = texto.slice(0, MAX_LARGO);
     const mensajes = [
@@ -28,7 +28,7 @@ export function crearAgente({ negocio, memoria, agenda, completar, log = console
         for (const ll of llamadas) {
           let args = {};
           try { args = JSON.parse(ll.function.arguments || '{}'); } catch { /* args inválidos: se reporta abajo */ }
-          const resultado = ejecutar(ll.function.name, args, { agenda, memoria, telefono });
+          const resultado = await ejecutar(ll.function.name, args, { negocio, agenda, memoria, tickets, telefono, notificar });
           log.info?.(`[herramienta] ${telefono} ${ll.function.name}(${JSON.stringify(args)}) →`, JSON.stringify(resultado));
           mensajes.push({ role: 'tool', tool_call_id: ll.id, content: JSON.stringify(resultado) });
         }

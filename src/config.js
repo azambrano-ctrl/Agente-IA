@@ -11,6 +11,7 @@ export const config = {
   negocioFile: path.resolve(env.NEGOCIO_FILE ?? './negocio.json'),
   maxHistorial: Number(env.MAX_HISTORIAL ?? 20),
   debounceMs: Number(env.DEBOUNCE_MS ?? 2500),
+  adminWhatsapp: (env.ADMIN_WHATSAPP ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   whatsapp: {
     token: env.WHATSAPP_TOKEN ?? '',
     phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID ?? '',

@@ -41,11 +41,11 @@ test('2 mensajes a la vez: la cola los junta en un solo turno', async () => {
   const turnos = [];
   const cola = crearCola(async (tel, texto) => { turnos.push([tel, texto]); }, { esperaMs: 20, log: silencio });
   cola.agregar('549111', 'hola');
-  cola.agregar('549111', '¿tienen turno el jueves?');
+  cola.agregar('549111', 'no anda internet');
   cola.agregar('549222', 'buenas');
   await new Promise((r) => setTimeout(r, 60));
   await cola.drenar();
-  assert.deepEqual(turnos.sort(), [['549111', 'hola\n¿tienen turno el jueves?'], ['549222', 'buenas']]);
+  assert.deepEqual(turnos.sort(), [['549111', 'hola\nno anda internet'], ['549222', 'buenas']]);
 });
 
 test('servidor: valida firma, ignora duplicados y encola el texto', async () => {

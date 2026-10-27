@@ -6,6 +6,7 @@ import { config, faltantes } from '../src/config.js';
 import { Memoria } from '../src/memoria.js';
 import { crearModelo } from '../src/modelo.js';
 import { cargarNegocio } from '../src/negocio.js';
+import { Tickets } from '../src/tickets.js';
 
 if (faltantes(['OPENROUTER_API_KEY']).length) {
   console.error('Falta OPENROUTER_API_KEY en .env');
@@ -17,7 +18,8 @@ const negocio = cargarNegocio(config.negocioFile);
 const memoria = new Memoria(config.dataDir, config.maxHistorial);
 const agenda = new Agenda(config.dataDir, negocio);
 const responder = crearAgente({
-  negocio, memoria, agenda,
+  negocio, memoria, agenda, tickets: new Tickets(config.dataDir),
+  notificar: async (t) => console.log(`\x1b[33m[aviso al equipo] ${t}\x1b[0m`),
   completar: crearModelo(config.openrouter),
   log: { info: (...a) => console.log('\x1b[2m', ...a, '\x1b[0m'), error: console.error },
 });

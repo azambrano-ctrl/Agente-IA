@@ -9,7 +9,7 @@ export class Memoria {
   }
 
   #cliente(telefono) {
-    return (this.almacen.datos.clientes[telefono] ??= { nombre: null, historial: [] });
+    return (this.almacen.datos.clientes[telefono] ??= { nombre: null, direccion: null, numeroCliente: null, historial: [] });
   }
 
   historial(telefono) {
@@ -24,12 +24,15 @@ export class Memoria {
   }
 
   datos(telefono) {
-    const { nombre } = this.#cliente(telefono);
-    return { telefono, nombre };
+    const { nombre = null, direccion = null, numeroCliente = null } = this.#cliente(telefono);
+    return { telefono, nombre, direccion, numeroCliente };
   }
 
-  guardarNombre(telefono, nombre) {
-    this.#cliente(telefono).nombre = nombre;
+  actualizarDatos(telefono, cambios) {
+    const c = this.#cliente(telefono);
+    for (const campo of ['nombre', 'direccion', 'numeroCliente']) {
+      if (cambios[campo]?.trim()) c[campo] = cambios[campo].trim();
+    }
     this.almacen.guardar();
   }
 

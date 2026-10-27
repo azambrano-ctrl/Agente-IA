@@ -1,62 +1,74 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ErrorAgenda } from '../src/agenda.js';
-import { entorno } from './ayuda.js';
+import { ErrorHerramienta } from '../src/errores.js';
+import { consultarCobertura, proximosDias } from '../src/negocio.js';
+import { entorno, negocio } from './ayuda.js';
 
-test('genera turnos cada 45 min dentro del horario (8 a 18 h)', () => {
+const visita = (extra) => ({ fecha: '2027-03-04', franja: '14:00-16:00', tipo: 'visita técnica', nombre: 'Lucía Paz', direccion: 'Obispo Trejo 300', telefono: '549111', ...extra });
+
+test('franjas de 2 h dentro del horario de visitas', () => {
   const { agenda } = entorno();
-  const turnos = agenda.turnosDelDia('2027-03-02');
-  assert.equal(turnos[0], '08:00');
-  assert.equal(turnos[1], '08:45');
-  assert.equal(turnos.at(-1), '17:00');
+  assert.deepEqual(agenda.franjasDelDia('2027-03-02'), ['08:00-10:00', '10:00-12:00', '12:00-14:00', '14:00-16:00', '16:00-18:00']);
+  assert.deepEqual(agenda.franjasDelDia('2027-03-06'), ['09:00-11:00', '11:00-13:00']);
 });
 
-test('turno el 31 de febrero: la fecha no existe', () => {
+test('visita el 31 de febrero: la fecha no existe', () => {
   const { agenda } = entorno();
-  assert.throws(() => agenda.verAgenda('2027-02-31'), (e) => e instanceof ErrorAgenda && /no existe/.test(e.message));
+  assert.throws(() => agenda.verAgenda('2027-02-31'), (e) => e instanceof ErrorHerramienta && /no existe/.test(e.message));
 });
 
 test('rechaza fechas pasadas, domingos y formatos inválidos', () => {
   const { agenda } = entorno();
   assert.throws(() => agenda.verAgenda('2027-02-26'), /ya pasó/);
-  assert.throws(() => agenda.verAgenda('2027-03-07'), /cerrado/);
+  assert.throws(() => agenda.verAgenda('2027-03-07'), /No hay visitas/);
   assert.throws(() => agenda.verAgenda('jueves'), /Formato/);
 });
 
-test('hoy no ofrece horarios que ya pasaron', () => {
+test('hoy no ofrece franjas que ya empezaron', () => {
   const { agenda } = entorno();
-  const { libres } = agenda.verAgenda('2027-03-01');
-  assert.ok(!libres.includes('09:30'));
-  assert.ok(!libres.includes('10:00') || libres[0] > '10:00');
-  assert.equal(libres[0], '10:15');
+  assert.equal(agenda.verAgenda('2027-03-01').libres[0], '12:00-14:00');
 });
 
-test('agendar y cancelar', () => {
+test('cada franja admite tantas visitas como cuadrillas', () => {
   const { agenda } = entorno();
-  const cita = agenda.crearCita({ fecha: '2027-03-04', hora: '16:15', servicio: 'limpieza', nombre: 'Lucía Paz', telefono: '549111' });
-  assert.equal(cita.estado, 'confirmada');
-  assert.ok(agenda.verAgenda('2027-03-04').ocupados.includes('16:15'));
-  assert.throws(() => agenda.crearCita({ fecha: '2027-03-04', hora: '16:15', nombre: 'Otro', telefono: '549222' }), /no está disponible/);
-
-  assert.deepEqual(agenda.citasDe('549111').map((c) => c.id), [cita.id]);
-  agenda.cancelarCita(cita.id, '549111');
-  assert.ok(agenda.verAgenda('2027-03-04').libres.includes('16:15'));
-  assert.equal(agenda.citasDe('549111').length, 0);
+  agenda.crearVisita(visita());
+  agenda.crearVisita(visita({ telefono: '549222' }));
+  assert.ok(agenda.verAgenda('2027-03-04').completas.includes('14:00-16:00'));
+  assert.throws(() => agenda.crearVisita(visita({ telefono: '549333' })), /no está disponible/);
 });
 
-test('un cliente no puede cancelar el turno de otro', () => {
+test('agendar y cancelar una visita', () => {
   const { agenda } = entorno();
-  const cita = agenda.crearCita({ fecha: '2027-03-04', hora: '09:30', nombre: 'Lucía', telefono: '549111' });
-  assert.throws(() => agenda.cancelarCita(cita.id, '549999'), /No encontré/);
+  const v = agenda.crearVisita(visita({ tipo: 'instalación' }));
+  assert.deepEqual(agenda.visitasDe('549111').map((x) => x.id), [v.id]);
+  assert.throws(() => agenda.cancelarVisita(v.id, '549999'), /No encontré/); // otro cliente
+  agenda.cancelarVisita(v.id, '549111');
+  assert.equal(agenda.visitasDe('549111').length, 0);
 });
 
-test('rechaza horarios fuera de grilla y servicios inexistentes', () => {
+test('pide dirección, tipo válido y franja de la grilla', () => {
   const { agenda } = entorno();
-  assert.throws(() => agenda.crearCita({ fecha: '2027-03-04', hora: '09:10', nombre: 'A', telefono: '1' }), /no es un horario/);
-  assert.throws(() => agenda.crearCita({ fecha: '2027-03-04', hora: '09:30', servicio: 'cirugía', nombre: 'A', telefono: '1' }), /Servicio desconocido/);
+  assert.throws(() => agenda.crearVisita(visita({ direccion: '' })), /dirección/);
+  assert.throws(() => agenda.crearVisita(visita({ tipo: 'pintura' })), /Tipo de visita/);
+  assert.throws(() => agenda.crearVisita(visita({ franja: '14:30-16:30' })), /no es una franja/);
 });
 
-test('próximos días para traducir fechas relativas', async () => {
-  const { proximosDias } = await import('../src/negocio.js');
-  assert.match(proximosDias('2027-02-26', 4), /^viernes 2027-02-26, sábado 2027-02-27, domingo 2027-02-28, lunes 2027-03-01$/);
+test('cobertura: reconoce barrios sin importar tildes y avisa cortes de la zona', () => {
+  const n = { ...negocio, avisos: [{ zona: 'Alberdi', mensaje: 'Corte de fibra, se estima volver a las 18 h' }] };
+  assert.deepEqual(consultarCobertura(n, 'vivo en nueva cordoba'), { cubierto: true, zona: 'Nueva Córdoba', avisos: [] });
+  assert.equal(consultarCobertura(n, 'Barrio Alberdi').avisos[0].mensaje, 'Corte de fibra, se estima volver a las 18 h');
+  assert.equal(consultarCobertura(n, 'Villa Allende').cubierto, 'no_confirmado');
+});
+
+test('tickets numerados y solo visibles para su dueño', () => {
+  const { tickets } = entorno();
+  const t1 = tickets.crear({ tipo: 'soporte', descripcion: 'sin internet, LOS rojo', telefono: '549111', cliente: {} });
+  const t2 = tickets.crear({ tipo: 'baja', descripcion: 'se muda', telefono: '549222', cliente: {} });
+  assert.equal(t2.numero, t1.numero + 1);
+  assert.deepEqual(tickets.de('549111').map((t) => t.numero), [t1.numero]);
+  assert.throws(() => tickets.crear({ tipo: 'cualquiera', descripcion: 'x', telefono: '1' }), ErrorHerramienta);
+});
+
+test('próximos días para traducir fechas relativas', () => {
+  assert.equal(proximosDias('2027-02-26', 4), 'viernes 2027-02-26, sábado 2027-02-27, domingo 2027-02-28, lunes 2027-03-01');
 });
