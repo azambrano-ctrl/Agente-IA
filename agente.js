@@ -1,6 +1,7 @@
 import { watchFile } from 'node:fs';
 import { crearAgente } from './src/agente.js';
 import { Agenda } from './src/agenda.js';
+import { crearAvisoCrm, fuenteCrm, fuenteLocal } from './src/clientes.js';
 import { crearCola } from './src/cola.js';
 import { config, faltantes } from './src/config.js';
 import { Memoria } from './src/memoria.js';
@@ -31,7 +32,8 @@ watchFile(config.negocioFile, { interval: 2000 }, () => {
 
 const memoria = new Memoria(config.dataDir, config.maxHistorial);
 const agenda = new Agenda(config.dataDir, negocio);
-const sistema = new Sistema(config.dataDir);
+const sistema = new Sistema(config.dataDir, undefined, crearAvisoCrm({ url: config.crm.avisoOrdenesUrl, token: config.crm.token }));
+const clientes = config.crm.saldoUrl ? fuenteCrm({ url: config.crm.saldoUrl, ...config.crm }) : fuenteLocal(sistema);
 const whatsapp = crearWhatsApp(config.whatsapp);
 
 // Avisa a la oficina de órdenes y gestiones (requiere que hayan escrito al número en las últimas 24 h).
@@ -43,7 +45,7 @@ const notificar = async (texto) => {
 
 const despacho = crearDespacho({ negocio, sistema, memoria, whatsapp, plantilla: config.whatsapp.plantillaTecnico, notificarAdmin: notificar });
 const panel = crearPanel({ ...config.panel, sistema, despacho, agenda });
-const responder = crearAgente({ negocio, memoria, agenda, sistema, despacho, notificar, completar: crearModelo(config.openrouter) });
+const responder = crearAgente({ negocio, memoria, agenda, sistema, despacho, clientes, notificar, completar: crearModelo(config.openrouter) });
 
 const cola = crearCola(async (telefono, texto) => {
   const respuesta = await responder(telefono, texto);
@@ -54,6 +56,7 @@ const cola = crearCola(async (telefono, texto) => {
 const servidor = crearServidor({ config, cola, whatsapp, despacho, panel });
 servidor.listen(config.port, () => {
   console.info(`🤖 Agente de ${negocio.nombre} escuchando en :${config.port} (modelo ${config.openrouter.modelo})`);
+  console.info(`   Saldos: ${clientes.tipo === 'crm' ? `servidor ${config.crm.saldoUrl}` : 'planilla importada (CSV)'}`);
   console.info(`   Webhook: https://TU-DOMINIO/webhook · Panel: https://TU-DOMINIO/panel${config.panel.clave ? '' : ' (deshabilitado: falta PANEL_CLAVE)'}`);
 });
 

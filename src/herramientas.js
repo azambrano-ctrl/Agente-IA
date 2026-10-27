@@ -1,6 +1,7 @@
 import { ErrorHerramienta } from './errores.js';
 import { consultarCobertura } from './negocio.js';
 import { estaCerrada } from './sistema.js';
+import { fuenteLocal } from './clientes.js';
 
 const texto = (description) => ({ type: 'string', description });
 const funcion = (name, description, properties = {}, required = []) => ({
@@ -25,6 +26,7 @@ export const definiciones = [
       descripcion: texto('Qué le pasa, desde cuándo'),
       diagnostico: texto('Qué ya probó: luces del módem (PON/LOS), reinicio, cable/WiFi'),
       disponibilidad: texto('Cuándo puede recibir al técnico'),
+      direccion: texto('Dirección del servicio, solo si el sistema no la tiene o el cliente la corrige'),
     }, ['tipo', 'descripcion', 'diagnostico']),
   funcion('consultar_cobertura', 'Verifica si hay servicio en un barrio o dirección y si hay cortes avisados.', {
     ubicacion: texto('Dirección, barrio o localidad'),
@@ -69,61 +71,79 @@ const resumenOrden = (o) => ({
 
 /**
  * Ejecuta una herramienta. El teléfono sale del webhook, nunca del modelo, y el cliente
- * queda vinculado solo si coincide su WhatsApp o DNI + número de cliente.
+ * queda identificado solo si coincide su WhatsApp o DNI + número de cliente.
  */
 export async function ejecutar(nombre, args, ctx) {
   const { negocio, agenda, memoria, sistema, despacho, telefono, notificar } = ctx;
-  const vinculado = () => {
-    const num = memoria.datos(telefono).numeroCliente;
-    const c = num && sistema.cliente(num);
-    if (!c) throw new ErrorHerramienta('Primero identificá al cliente con identificar_cliente.');
-    return c;
+  const clientes = ctx.clientes ?? fuenteLocal(sistema);
+
+  const identificado = () => {
+    const ficha = memoria.clienteIdentificado(telefono);
+    if (!ficha) throw new ErrorHerramienta('Primero identificá al cliente con identificar_cliente.');
+    return ficha;
   };
 
   try {
     switch (nombre) {
       case 'identificar_cliente': {
-        let c = sistema.clientePorTelefono(telefono);
-        if (!c && (args.dni || args.numeroCliente)) {
-          if (memoria.intentos(telefono) >= 3) {
-            return { encontrado: false, error: 'Demasiados intentos. Derivá a la oficina con crear_gestion tipo "humano".' };
-          }
-          c = sistema.clientePorDatos(args.dni, args.numeroCliente);
-          if (!c) memoria.sumarIntento(telefono);
+        const conDatos = Boolean(args.dni || args.numeroCliente);
+        if (conDatos && memoria.intentos(telefono) >= 3) {
+          return { encontrado: false, error: 'Demasiados intentos. Derivá a la oficina con crear_gestion tipo "humano".' };
         }
-        if (!c) {
-          return { encontrado: false, nota: args.dni ? 'DNI y número de cliente no coinciden.' : 'Este WhatsApp no está registrado: pedí DNI y número de cliente.' };
+        const r = await clientes.buscar({ telefono, dni: args.dni, numeroCliente: args.numeroCliente });
+        if (r.error) return { encontrado: false, error: r.error };
+        if (!r.cliente || !r.verificado) {
+          if (conDatos) memoria.sumarIntento(telefono);
+          let nota = 'Este WhatsApp no está registrado: pedí DNI y número de cliente.';
+          if (r.faltan) nota = `Para consultar el sistema falta: ${r.faltan.join(' y ')}.`;
+          else if (r.pedirAmbos) nota = 'Por seguridad pedí DNI y número de cliente (los dos).';
+          else if (conDatos) nota = 'Los datos no coinciden con ningún cliente.';
+          if (!clientes.porTelefono && !conDatos) nota = 'Pedile el DNI y el número de cliente.';
+          return { encontrado: false, nota };
         }
+        const c = r.cliente;
+        const ficha = { ...c, buscadoCon: { dni: args.dni ?? null, numeroCliente: args.numeroCliente ?? null } };
+        memoria.guardarFicha(telefono, ficha);
         memoria.actualizarDatos(telefono, { numeroCliente: c.numeroCliente, nombre: c.nombre, direccion: c.direccion });
-        return { encontrado: true, cliente: resumenCliente(c) };
+        return { encontrado: true, cliente: c.texto ? { informacionDelSistema: c.texto } : resumenCliente(c) };
       }
 
       case 'consultar_deuda': {
-        const c = vinculado();
+        const ficha = identificado();
+        // Siempre consulta el saldo actualizado (en el CRM puede haber cambiado).
+        const r = await clientes.buscar({ telefono, ...ficha.buscadoCon });
+        if (r.error) return { error: r.error };
+        const c = r.cliente && r.verificado ? r.cliente : ficha;
+        memoria.guardarFicha(telefono, { ...c, buscadoCon: ficha.buscadoCon });
+        if (c.texto) return { informacionDelSistema: c.texto, mediosDePago: negocio.pagos };
         const hoy = new Date().toISOString().slice(0, 10);
         return {
           ...resumenCliente(c),
-          saldo: c.saldo, moneda: negocio.moneda ?? '$',
-          vencimiento: c.vencimiento, vencida: Boolean(c.saldo > 0 && c.vencimiento && c.vencimiento < hoy),
-          ultimoPago: c.ultimoPago, mediosDePago: negocio.pagos,
+          saldo: c.saldo ?? null, moneda: negocio.moneda ?? '$',
+          vencimiento: c.vencimiento ?? null, vencida: Boolean(c.saldo > 0 && c.vencimiento && c.vencimiento < hoy),
+          ultimoPago: c.ultimoPago ?? null, mediosDePago: negocio.pagos,
+          ...(c.respuestaCompleta ? { respuestaCompletaDelSistema: c.respuestaCompleta } : {}),
         };
       }
 
       case 'reportar_falla': {
-        const c = vinculado();
+        const c = identificado();
         if (c.estado === 'suspendido') {
           return { ok: false, motivo: 'servicio_suspendido_por_deuda', saldo: c.saldo, nota: 'No se despacha técnico: el servicio está suspendido por falta de pago. Informá la deuda y los medios de pago.' };
         }
-        const cobertura = consultarCobertura(negocio, c.zona || c.direccion);
+        const direccion = args.direccion?.trim() || c.direccion;
+        if (!direccion) throw new ErrorHerramienta('El sistema no tiene la dirección del cliente: pedísela y pasala en "direccion".');
+        const zona = c.zona || consultarCobertura(negocio, direccion).zona || '';
+        const cobertura = consultarCobertura(negocio, zona || direccion);
         if (cobertura.avisos?.length) {
           return { ok: false, motivo: 'corte_masivo', avisos: cobertura.avisos, nota: 'Hay un corte general en su zona: no se despacha técnico.' };
         }
-        const existente = sistema.reparacionAbierta(c.numeroCliente);
+        const existente = sistema.reparacionAbierta(c.numeroCliente, telefono);
         if (existente) return { ok: true, yaExistia: true, orden: resumenOrden(existente) };
 
         const orden = sistema.crearOrden({
-          clase: 'reparacion', tipo: args.tipo, telefono, numeroCliente: c.numeroCliente,
-          nombre: c.nombre, direccion: c.direccion, zona: c.zona, descripcion: args.descripcion,
+          clase: 'reparacion', tipo: args.tipo, telefono, numeroCliente: c.numeroCliente ?? null,
+          nombre: c.nombre ?? memoria.datos(telefono).nombre ?? '', direccion, zona, descripcion: args.descripcion,
           datos: { diagnostico: args.diagnostico, disponibilidad: args.disponibilidad, plan: c.plan, telefonoContacto: c.telefono || telefono },
         });
         const d = await despacho.despachar(orden);

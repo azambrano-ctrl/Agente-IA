@@ -22,9 +22,10 @@ const numero = (v) => {
  * (reparaciones, instalaciones y gestiones administrativas).
  */
 export class Sistema {
-  constructor(dataDir, reloj = () => new Date()) {
+  constructor(dataDir, reloj = () => new Date(), alCambiar = () => {}) {
     this.almacen = new Almacen(path.join(dataDir, 'sistema.json'), { ultimaOrden: 1000, clientes: [], ordenes: [] });
     this.reloj = reloj;
+    this.alCambiar = alCambiar; // (evento, orden) → ej. avisar al VPS/CRM
   }
 
   get #d() {
@@ -101,6 +102,7 @@ export class Sistema {
     };
     this.#d.ordenes.push(orden);
     this.almacen.guardar();
+    this.alCambiar('orden_creada', orden);
     return orden;
   }
 
@@ -115,6 +117,7 @@ export class Sistema {
     Object.assign(o, cambios);
     o.historial.push({ ts: this.reloj().toISOString(), estado: o.estado, nota });
     this.almacen.guardar();
+    this.alCambiar('orden_actualizada', o);
     return o;
   }
 
@@ -126,8 +129,9 @@ export class Sistema {
     return this.#d.ordenes.filter((o) => mismoTelefono(o.telefono, telefono)).slice(-10).reverse();
   }
 
-  reparacionAbierta(numeroCliente) {
-    return this.#d.ordenes.find((o) => o.clase === 'reparacion' && o.numeroCliente === numeroCliente && !CERRADAS.has(o.estado)) ?? null;
+  reparacionAbierta(numeroCliente, telefono) {
+    return this.#d.ordenes.find((o) => o.clase === 'reparacion' && !CERRADAS.has(o.estado)
+      && (numeroCliente ? o.numeroCliente === numeroCliente : mismoTelefono(o.telefono, telefono))) ?? null;
   }
 
   ordenesDeTecnico(telefono) {

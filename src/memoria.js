@@ -36,6 +36,16 @@ export class Memoria {
     this.almacen.guardar();
   }
 
+  /** Ficha del cliente identificado (viene del CRM o de la planilla). */
+  clienteIdentificado(telefono) {
+    return this.#cliente(telefono).ficha ?? null;
+  }
+
+  guardarFicha(telefono, ficha) {
+    this.#cliente(telefono).ficha = ficha;
+    this.almacen.guardar();
+  }
+
   /** Intentos fallidos de identificación (anti adivinanza de DNI). */
   intentos(telefono) {
     return this.#cliente(telefono).intentos ?? 0;

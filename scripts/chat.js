@@ -7,6 +7,7 @@ import { Memoria } from '../src/memoria.js';
 import { crearModelo } from '../src/modelo.js';
 import { cargarNegocio } from '../src/negocio.js';
 import { crearDespacho } from '../src/despacho.js';
+import { fuenteCrm, fuenteLocal } from '../src/clientes.js';
 import { Sistema } from '../src/sistema.js';
 
 if (faltantes(['OPENROUTER_API_KEY']).length) {
@@ -24,8 +25,9 @@ const notificar = async (t) => amarillo(`[aviso a la oficina] ${t}`);
 // En el chat local los WhatsApp a técnicos y clientes se muestran en pantalla.
 const whatsapp = { enviarTexto: async (to, t) => amarillo(`[WhatsApp a ${to}]\n${t}`), enviarPlantilla: async () => {} };
 const despacho = crearDespacho({ negocio, sistema, memoria, whatsapp, notificarAdmin: notificar });
+const clientes = config.crm.saldoUrl ? fuenteCrm({ url: config.crm.saldoUrl, ...config.crm }) : fuenteLocal(sistema);
 const responder = crearAgente({
-  negocio, memoria, agenda, sistema, despacho, notificar,
+  negocio, memoria, agenda, sistema, despacho, clientes, notificar,
   completar: crearModelo(config.openrouter),
   log: { info: (...a) => console.log('\x1b[2m', ...a, '\x1b[0m'), error: console.error },
 });

@@ -27,6 +27,14 @@ export const config = {
     usuario: env.PANEL_USUARIO ?? 'admin',
     clave: env.PANEL_CLAVE ?? '',
   },
+  // Servidor (VPS) que consulta saldos en el CRM. Vacío = se usa la planilla CSV importada.
+  crm: {
+    saldoUrl: env.CRM_SALDO_URL ?? '',
+    metodo: (env.CRM_SALDO_METODO ?? 'GET').toUpperCase(),
+    token: env.CRM_TOKEN ?? '',
+    campos: env.CRM_CAMPOS ? JSON.parse(env.CRM_CAMPOS) : {},
+    avisoOrdenesUrl: env.CRM_ORDENES_URL ?? '',
+  },
   openrouter: {
     apiKey: env.OPENROUTER_API_KEY ?? '',
     modelo: env.MODELO ?? 'openai/gpt-4o-mini',

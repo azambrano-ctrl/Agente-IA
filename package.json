@@ -11,7 +11,8 @@
     "start": "node agente.js",
     "chat": "node scripts/chat.js",
     "test": "node --test test/*.test.js",
-    "importar": "node scripts/importar.js"
+    "importar": "node scripts/importar.js",
+    "probar-saldo": "node scripts/probar-saldo.js"
   },
   "license": "MIT"
 }

@@ -2,7 +2,7 @@
 
 El WhatsApp de tu proveedor de internet atendiendo solo:
 
-- 💰 **"¿Cuánto debo?"**: identifica al cliente y le revisa el sistema (saldo, vencimiento, último pago, si está suspendido y cómo pagar).
+- 💰 **"¿Cuánto debo?"**: identifica al cliente y le consulta el saldo a tu servidor (VPS + CRM) o a la planilla cargada (saldo, vencimiento, último pago, si está suspendido y cómo pagar).
 - 🏠 **"Quiero instalar internet"**: le hace todas las preguntas (cobertura, plan, titular, DNI, dirección, entre calles, vivienda, email, ubicación y día), le muestra un resumen, la carga en el sistema, reserva la franja y se la manda al técnico.
 - 🚨 **"No tengo internet"**: revisa si hay un corte en la zona, lo guía con los pasos básicos y, si no se resuelve, carga la incidencia en el sistema y **la despacha a un técnico por WhatsApp**. El técnico contesta `TOMO`, `EN CAMINO` y `LISTO`, y el cliente recibe un aviso en cada paso.
 - 🗂️ **Bajas, cambios de plan, facturación o "quiero hablar con alguien"**: las deriva a la oficina con número de gestión.
@@ -52,7 +52,39 @@ En Meta › WhatsApp › Configuración › Webhook poné la URL `https://TU-DOM
 
 Con el servidor andando, `negocio.json` se recarga solo: cargás o sacás un corte y se aplica al instante.
 
-## 3 · Cargar los clientes y sus deudas
+## 3 · Conectar tu servidor de saldos (VPS + CRM)
+
+Si ya tenés un servidor que consulta los saldos en el CRM, el agente le pregunta a él. No hace falta que el CRM tenga API: alcanza con que tu VPS responda a una URL.
+
+```env
+CRM_SALDO_URL=http://IP-DE-TU-VPS:8080/saldo?dni={dni}
+# o por número de WhatsApp:  ...?telefono={telefono}   (le llega sin 54 9, ej. 3515551234)
+# o con los dos datos:       ...?dni={dni}&cliente={numeroCliente}
+CRM_SALDO_METODO=GET         # o POST: manda {"dni","numeroCliente","telefono"} en JSON
+CRM_TOKEN=                   # si pide Authorization: Bearer
+```
+
+Lo que devuelva tu VPS se interpreta solo:
+
+- **JSON** con cualquier nombre de campo habitual (`saldo`/`deuda`/`total`, `nombre`/`razon_social`, `dni`/`documento`, `celular`, `domicilio`, `barrio`, `estado`, `vencimiento`…), aunque venga anidado en `data` o `cliente`, y con montos tipo `24.000,00`. Si usás nombres raros: `CRM_CAMPOS={"saldo":"datos.deuda_total"}`.
+- **Texto** (ej. `Saldo: $24.000 - Vence 10/03`): se le pasa tal cual al agente, que lo lee y se lo explica al cliente.
+- **404** o `{"encontrado": false}`: el cliente no existe.
+
+Probalo antes de salir en vivo:
+
+```bash
+npm run probar-saldo -- dni=30111222
+```
+
+Muestra la respuesta cruda de tu VPS y cómo la entendió el agente.
+
+**Seguridad:** el saldo se da solo si el teléfono del CRM coincide con el WhatsApp del cliente, o si el cliente dio DNI y número de cliente y los dos coinciden. Después de 3 intentos fallidos lo deriva a la oficina. El saldo se consulta en el momento cada vez que lo pide (si pagó, se ve al toque).
+
+**Incidencias hacia el CRM (opcional):** con `CRM_ORDENES_URL=http://IP-DE-TU-VPS:8080/ordenes`, tu VPS recibe un `POST` con cada incidencia o instalación nueva y cada cambio de estado (`{"evento": "orden_creada" | "orden_actualizada", "orden": {...}}`), por si quieren cargarlas también en el CRM.
+
+## 3 bis · O cargar los clientes desde una planilla
+
+Si no usás `CRM_SALDO_URL`, el agente usa la planilla importada.
 
 Exportá tu planilla de Excel como CSV con estas columnas (sirve `;` o `,`). Tenés un ejemplo en `data/clientes-ejemplo.csv`.
 
@@ -148,7 +180,8 @@ Sin Docker podés usar `deploy/agente.service` (systemd). Para comprobar que est
 agente.js            servidor (entrada)
 negocio.json         ficha de la empresa y técnicos   ← lo que más vas a editar
 src/
-  sistema.js         clientes, deudas y órdenes de trabajo
+  sistema.js         órdenes de trabajo (y clientes de la planilla)
+  clientes.js        conexión con tu servidor de saldos (VPS/CRM) o la planilla
   despacho.js        asignación a técnicos y comandos por WhatsApp
   herramientas.js    lo que el agente puede hacer en el sistema
   agente.js          bucle modelo ↔ herramientas
@@ -160,7 +193,7 @@ src/
   cola.js            junta mensajes seguidos y ordena por cliente
   memoria.js         historial por cliente
   csv.js, telefono.js, modelo.js, config.js, almacen.js, errores.js
-scripts/             chat local e importador de CSV
+scripts/             chat local, importador de CSV y prueba del servidor de saldos
 deploy/              Dockerfile, docker-compose, Caddyfile, systemd
 test/                batería de pruebas
 ```
